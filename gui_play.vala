@@ -1,31 +1,77 @@
+class SpinArray : Object {
+	Gtk.SpinButton[] buttons;
+	public signal void state_notify(bool dirty);
+
+	public delegate void ForeachCallback(Gtk.SpinButton button);
+	public void @foreach(ForeachCallback callback)
+	{
+		foreach (unowned Gtk.SpinButton button in buttons)
+			callback(button);
+	}
+	public SpinArray(int N)
+	{
+		buttons = new Gtk.SpinButton[N];
+		for (int i = 0; i < N; i++) {
+			buttons[i] = new Gtk.SpinButton.with_range(0, 0, 1);
+			buttons[i].value_changed.connect(on_spin_value_changed);
+		}
+	}
+	public void get_active(out int i, out int val)
+	{
+		i = 0;
+		val = -1;
+		foreach (unowned Gtk.SpinButton button in buttons) {
+			if (button.sensitive) {
+				val = (int) button.value;
+				return;
+			}
+			i++;
+		}
+	}
+	public void reset(int[] val)
+		requires(val.length == buttons.length)
+	{
+		for (int i = 0; i < val.length; i++) {
+			buttons[i].set_range(0, val[i]);
+			buttons[i].value = val[i];
+		}
+		state_notify(false);
+	}
+	void on_spin_value_changed(Gtk.SpinButton button) {
+		double min, max;
+		button.get_range(out min, out max);
+		bool dirty = (button.value < max);
+		foreach (unowned Gtk.SpinButton button1 in buttons) {
+			button1.sensitive = !dirty || (button == button1);
+		}
+		state_notify(dirty);
+	}
+}
+
 class NimWindow : Gtk.Window {
 	int N;
-	Gtk.SpinButton[] spins;
-	Gtk.ButtonBox button_box;
+	SpinArray spins;
 	Nim nim;
 
 	public NimWindow(int N)
 	{
 		this.N = N;
 		this.title = "Nim Game";
-		this.spins = new Gtk.SpinButton[N];
+		this.spins = new SpinArray(N);
 
 		var vbox = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-		for (int i = 0; i < N; i++) {
-			int local_i = i;
-			var spin = this.spins[i] = new Gtk.SpinButton.with_range(0, 0, 1);
-			vbox.add(spin);
-			spin.value_changed.connect(() => this.on_spin_value_changed(local_i));
-		}
 
-		this.button_box = new Gtk.ButtonBox(Gtk.Orientation.HORIZONTAL);
+		Gtk.ButtonBox button_box = new Gtk.ButtonBox(Gtk.Orientation.HORIZONTAL);
 		var submit_button = new Gtk.Button.with_mnemonic("_Submit");
 		submit_button.clicked.connect(this.on_submit);
-		this.button_box.add(submit_button);
+		button_box.add(submit_button);
 		var reset_button = new Gtk.Button.with_mnemonic("_Reset");
 		reset_button.clicked.connect(this.load_state);
-		this.button_box.add(reset_button);
-		vbox.add(this.button_box);
+		button_box.add(reset_button);
+
+		this.spins.state_notify.connect((dirty) => { button_box.sensitive = dirty; });
+		this.spins.foreach((button) => vbox.add(button));
+		vbox.add(button_box);
 
 		this.add(vbox);
 
@@ -52,49 +98,13 @@ class NimWindow : Gtk.Window {
 	}
 	void load_state()
 	{
-		int i = 0;
-		foreach (unowned Gtk.SpinButton spin in spins) {
-			int val = this.nim.state[i];
-			spin.set_range(0, val);
-			spin.value = (double) val;
-			i++;
-		}
-		enable_all_spins();
-		this.button_box.sensitive = false;
-	}
-	void on_spin_value_changed(int i)
-	{
-		unowned Gtk.SpinButton spin = spins[i];
-		bool dirty = (spin.value != this.nim.state[i]);
-		if (dirty) {
-			disable_some_spins(i);
-		} else {
-			enable_all_spins();
-		}
-		button_box.sensitive = dirty;
-	}
-	void disable_some_spins(int except)
-	{
-		int i = 0;
-		foreach (unowned Gtk.SpinButton spin in spins)
-			spin.sensitive = (i++ == except);
-	}
-	void enable_all_spins()
-	{
-		foreach (unowned Gtk.SpinButton spin in spins)
-			spin.sensitive = true;
+		spins.reset(nim.state);
 	}
 	void on_submit()
 	{
-		int i = 0;
-		int val = 0;
-		foreach (unowned Gtk.SpinButton spin in spins) {
-			if (spin.sensitive) {
-				val = (int) spin.value;
-				break;
-			}
-			i++;
-		}
+		int i;
+		int val;
+		spins.get_active(out i, out val);
 		nim.pick(i, this.nim.state[i] - val);
 		if (nim.is_end()) {
 			endgame(true);

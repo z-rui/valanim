@@ -1,6 +1,5 @@
 [Compact]
-public class Nim
-{
+public class Nim {
 	public int[] state;
 	public Nim(int n, int min, int max)
 	{
