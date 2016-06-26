@@ -28,12 +28,14 @@ class SpinArray : Object {
 			i++;
 		}
 	}
-	public void reset(int[] val)
-		requires(val.length == buttons.length)
+	public void reset(int[] values)
+		requires(values.length == buttons.length)
 	{
-		for (int i = 0; i < val.length; i++) {
-			buttons[i].set_range(0, val[i]);
-			buttons[i].value = val[i];
+		for (int i = 0; i < values.length; i++) {
+			unowned Gtk.SpinButton button = buttons[i];
+			int val = values[i];
+			button.set_range(0, val);
+			button.value = val;
 		}
 		state_notify(false);
 	}
@@ -57,30 +59,30 @@ class NimWindow : Gtk.Window {
 	{
 		this.N = N;
 		this.title = "Nim Game";
-		this.spins = new SpinArray(N);
+		var spins = this.spins = new SpinArray(N);
 
 		var vbox = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
 
 		Gtk.ButtonBox button_box = new Gtk.ButtonBox(Gtk.Orientation.HORIZONTAL);
 		var submit_button = new Gtk.Button.with_mnemonic("_Submit");
-		submit_button.clicked.connect(this.on_submit);
+		submit_button.clicked.connect(on_submit);
 		button_box.add(submit_button);
 		var reset_button = new Gtk.Button.with_mnemonic("_Reset");
-		reset_button.clicked.connect(this.load_state);
+		reset_button.clicked.connect(load_state);
 		button_box.add(reset_button);
 
-		this.spins.state_notify.connect((dirty) => { button_box.sensitive = dirty; });
-		this.spins.foreach((button) => vbox.add(button));
+		spins.state_notify.connect((dirty) => { button_box.sensitive = dirty; });
+		spins.foreach((button) => vbox.add(button));
 		vbox.add(button_box);
 
-		this.add(vbox);
+		add(vbox);
 
-		this.restart();
+		restart();
 	}
 	void restart()
 	{
 		this.nim = new Nim(this.N, 5, 15);
-		this.load_state();
+		load_state();
 	}
 	void endgame(bool win)
 	{
@@ -98,19 +100,19 @@ class NimWindow : Gtk.Window {
 	}
 	void load_state()
 	{
-		spins.reset(nim.state);
+		this.spins.reset(nim.state);
 	}
 	void on_submit()
 	{
 		int i;
 		int val;
-		spins.get_active(out i, out val);
+		this.spins.get_active(out i, out val);
 		nim.pick(i, this.nim.state[i] - val);
 		if (nim.is_end()) {
 			endgame(true);
 		} else {
 			nim.step();
-			this.load_state();
+			load_state();
 			if (nim.is_end())
 				endgame(false);
 		}
